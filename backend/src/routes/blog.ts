@@ -16,7 +16,7 @@ export const blogRouter = new Hono<{
     }
 }>();
 
-blogRouter.use('/*', async(c, next)=>{
+blogRouter.use('api/v1/blog', async(c, next)=>{
     const header = c.req.header("authorization") || " ";
     const token = header.split(" ")[1]
     const user = await verify(token, c.env.JWT_SECRET)
@@ -24,7 +24,7 @@ blogRouter.use('/*', async(c, next)=>{
         c.set('userId', user.id)
         await next()
     }else{
-      c.status(403)
+      c.status(401)
       return c.json({
         error: "authentication faled out",
       })
@@ -58,7 +58,7 @@ blogRouter.post('/', async (c) => {
 	});
 })
 
-blogRouter.put('/', async(c) =>{
+blogRouter.put('/update', async(c) =>{
 
 	const prisma = new PrismaClient({
 		datasourceUrl: c.env?.DATABASE_URL	,
