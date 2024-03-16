@@ -3,7 +3,7 @@ import { withAccelerate } from '@prisma/extension-accelerate'
 import { Hono } from 'hono'
 import {sign, verify} from 'hono/jwt'
 import { createPostInput, updatePostInput } from '@shez100x/easytypes'
-
+const JWT_SECRET = "newKey123"
 // missing: hashing, Admin Route, "pagination imp bit"
 // Create the main Hono app
 export const blogRouter = new Hono<{
@@ -16,20 +16,29 @@ export const blogRouter = new Hono<{
     }
 }>();
 
-blogRouter.use('api/v1/blog', async(c, next)=>{
-    const header = c.req.header("authorization") || " ";
-    const token = header.split(" ")[1]
-    const user = await verify(token, c.env.JWT_SECRET)
-    if(user){
-        c.set('userId', user.id)
-        await next()
-    }else{
-      c.status(401)
-      return c.json({
-        error: "authentication faled out",
-      })
+blogRouter.use('/', async (c, next) => {
+    const header = c.req.header("authorization") || "";
+    const jwt = header.split(" ")[1];
+
+    try {
+        const user = await verify(jwt, c.env.JWT_SECRET);
+        if (user) {
+            c.set('userId', user.id);
+            await next();
+        } else {
+            c.status(401);
+            return c.json({
+                error: "Authentication failed"
+            });
+        }
+    } catch (error) {
+        console.error("Error verifying token:", error);
+        c.status(401);
+        return c.json({
+            error: "Authentication failed"
+        });
     }
-  })
+});
  
 blogRouter.post('/', async (c) => {
 	const authtorId = c.get('userId');
@@ -58,8 +67,34 @@ blogRouter.post('/', async (c) => {
 	});
 })
 
-blogRouter.put('/update', async(c) =>{
+blogRouter.delete('/:id', async (c) => {
+    const id = c.req.param('id');
+    const prisma = new PrismaClient({
+        datasourceUrl: c.env?.DATABASE_URL,
+    }).$extends(withAccelerate());
 
+    try {
+        const post = await prisma.post.delete({
+            where: {
+                id: id,
+            },
+        });
+        return c.json({
+            msg: "Post deleted successfully",
+        });
+    } catch (error) {
+        console.error("Error deleting post:", error);
+        return (
+            c.status(500),
+            c.json({
+            error: "An error occurred while deleting the post.",
+        }));
+    }
+});
+
+
+blogRouter.put('/update/:id', async(c) =>{
+    const id = c.req.param('id');
 	const prisma = new PrismaClient({
 		datasourceUrl: c.env?.DATABASE_URL	,
 	}).$extends(withAccelerate());
@@ -75,7 +110,7 @@ blogRouter.put('/update', async(c) =>{
     }
 	const post = await prisma.post.update({
 		where: {
-            id: body.id,
+            id: id,
         },
         data: {
             title: body.title,
